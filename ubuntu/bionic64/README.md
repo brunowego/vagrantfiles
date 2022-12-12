@@ -3,7 +3,7 @@
 ## Environment File
 
 ```sh
-cp .example.env .env
+cp ./.example.env ./.env
 ```
 
 ## Running
