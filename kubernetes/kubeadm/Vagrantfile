@@ -1,0 +1,85 @@
+# frozen_string_literal: true
+
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+$LOAD_PATH.unshift File.expand_path 'lib', __dir__
+
+require 'os'
+
+%w[vagrant-env vagrant-timezone].each do |plugin|
+  next if Vagrant.has_plugin? plugin
+
+  puts "#{plugin} is not installed!"
+  puts 'To install the plugin, run:'
+  puts "vagrant plugin install #{plugin}"
+  exit
+end
+
+Vagrant.configure('2') do |config|
+  config.env.load './.env'
+
+  config.vm.box_check_update = false
+  config.vm.box = ENV.fetch('VAGRANT_VM_BOX', 'centos/7').to_s
+
+  if OS.unix?
+    config.vm.synced_folder './', '/vagrant', type: 'nfs'
+  else
+    config.vm.synced_folder './', '/vagrant', owner: 'vagrant', group: 'vagrant'
+  end
+
+  config.proxy.http = ENV['http_proxy']
+  config.proxy.https =
+    ENV.key?('https_proxy') ? ENV['https_proxy'] : ENV['http_proxy']
+  config.proxy.no_proxy = ENV['no_proxy']
+
+  config.timezone.value = 'America/Sao_Paulo'
+
+  config.vm.provider :virtualbox do |vb|
+    vb.customize [
+      'guestproperty', 'set', :id,
+      '/VirtualBox/GuestAdd/VBoxService/--timesync-set-threshold', 20_000
+    ]
+    vb.customize ['modifyvm', :id, '--vram', '4']
+  end
+
+  config.vm.provision :shell, path: './scripts/docker-ce.sh'
+  config.vm.provision :shell, path: './scripts/pre-install.sh'
+  config.vm.provision :shell, path: './scripts/k8s.sh'
+
+  ip_addr = IPAddr.new(ENV['VAGRANT_NETWORK_SUBNET']).succ.to_s
+
+  config.vm.define 'master', primary: true do |master|
+    master.vm.hostname = 'master.vagrant.vm'
+
+    master.vm.provider :virtualbox do |vb|
+      vb.name = 'k8s_kubeadm_master'
+      vb.memory = ENV.fetch('K8S_MASTERS_MEM', 2048).to_i
+      vb.cpus = ENV.fetch('K8S_MASTERS_CPUS', 1).to_i
+    end
+
+    ip_addr = IPAddr.new(ip_addr).succ.to_s
+    master.vm.network :private_network, ip: ip_addr
+
+    # master.vm.provision :shell, path: './scripts/k8s-master.sh'
+  end
+
+  K8S_NODES = ENV.fetch('K8S_NODES', 2).to_i
+
+  (1..K8S_NODES).each do |i|
+    config.vm.define "node#{i}" do |node|
+      node.vm.hostname = "node#{i}.vagrant.vm"
+
+      node.vm.provider :virtualbox do |v|
+        v.name = "k8s_kubeadm_node#{i}"
+        v.memory = ENV.fetch('K8S_NODES_MEM', 4096).to_i
+        v.cpus = ENV.fetch('K8S_NODES_CPUS', 2).to_i
+      end
+
+      ip_addr = IPAddr.new(ip_addr).succ.to_s
+      node.vm.network :private_network, ip: ip_addr
+
+      # node.vm.provision :shell, path: './scripts/k8s-node.sh'
+    end
+  end
+end
