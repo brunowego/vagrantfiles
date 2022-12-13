@@ -6,8 +6,7 @@
 cp .example.env .env
 ```
 
-## Running
+## Docs
 
-```sh
-vagrant up
-```
+- [Running Instructions](/DEVELOPER.md)
+

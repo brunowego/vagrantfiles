@@ -11,3 +11,7 @@ cp ./.example.env ./.env
 ```sh
 vagrant up --provider=libvirt
 ```
+
+## Docs
+
+- [Running Instructions](/DEVELOPER.md)
