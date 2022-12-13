@@ -1,0 +1,71 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+$LOAD_PATH.unshift File.expand_path 'lib', __dir__
+
+require 'env'
+require 'os'
+
+MACHINES = 1
+
+ip_addr = IPAddr.new(ENV['VAGRANT_NETWORK_SUBNET']).succ.to_s
+
+Vagrant.configure('2') do |config|
+  config.vm.box_check_update = false
+  config.vm.box = 'ubuntu/trusty64'
+
+  if OS.unix?
+    config.vm.synced_folder './', '/vagrant', type: 'nfs'
+  else
+    config.vm.synced_folder './', '/vagrant', owner: 'vagrant', group: 'vagrant'
+  end
+
+  unless Vagrant.has_plugin? 'vagrant-proxyconf'
+    puts 'vagrant-proxyconf is not installed!'
+    puts 'To install the plugin, run:'
+    puts 'vagrant plugin install vagrant-proxyconf'
+    exit
+  end
+
+  config.proxy.http = ENV['http_proxy']
+  config.proxy.https =
+    ENV.key?('https_proxy') ? ENV['https_proxy'] : ENV['http_proxy']
+  config.proxy.no_proxy = ENV['no_proxy']
+
+  unless Vagrant.has_plugin? 'vagrant-timezone'
+    puts 'vagrant-timezone is not installed!'
+    puts 'To install the plugin, run:'
+    puts 'vagrant plugin install vagrant-timezone'
+    exit
+  end
+
+  config.timezone.value = 'America/Sao_Paulo'
+
+  config.vm.provision :shell, inline: 'apt install -y make'
+  config.vm.provision :shell, inline: 'make -C /vagrant ansible/install'
+
+  config.vm.provision :ansible do |ansible|
+    ansible.compatibility_mode = '2.0'
+    ansible.config_file = './ansible/ansible.cfg'
+    ansible.playbook = './ansible/playbook.yml'
+    ansible.galaxy_role_file = './ansible/requirements.yml'
+  end
+
+  config.vm.provider :virtualbox do |vb|
+    vb.memory = 4096
+    vb.cpus = 2
+    vb.customize [
+      'guestproperty', 'set', :id,
+      '/VirtualBox/GuestAdd/VBoxService/--timesync-set-threshold', 20_000
+    ]
+    vb.customize ['modifyvm', :id, '--vram', '4']
+  end
+
+  (1..MACHINES).each do |id|
+    config.vm.define "machine#{id}" do |node|
+      node.vm.hostname = "machine#{id}"
+      ip_addr = IPAddr.new(ip_addr).succ.to_s
+      node.vm.network :private_network, ip: ip_addr
+    end
+  end
+end

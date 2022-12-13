@@ -1,0 +1,6 @@
+---
+- name: Install Git SCM
+  hosts: all
+  become: true
+  roles:
+    - role: geerlingguy.git

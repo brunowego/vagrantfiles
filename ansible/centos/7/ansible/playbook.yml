@@ -1,0 +1,5 @@
+---
+- name: Git SCM
+  import_playbook: ./playbooks/git.yml
+- name: Docker CE
+  import_playbook: ./playbooks/docker.yml

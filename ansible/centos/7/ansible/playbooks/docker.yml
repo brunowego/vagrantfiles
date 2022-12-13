@@ -1,0 +1,9 @@
+---
+- name: Install Docker CE and Docker Compose
+  hosts: all
+  become: true
+  vars:
+    docker_users:
+      - vagrant
+  roles:
+    - role: geerlingguy.docker
